@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Solix Project Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body { margin:0; font-family:Arial; background:#f1f5f9; }
+
+    .container { display:flex; height:100vh; }
+
+    /* SIDEBAR */
+    .sidebar {
+      width:250px;
+      background:#1e293b;
+      color:white;
+      padding:15px;
+    }
+
+    .sidebar img {
+      width:140px;
+      background:white;
+      padding:5px;
+      border-radius:6px;
+      margin-bottom:20px;
+    }
+
+    .project {
+      padding:10px;
+      cursor:pointer;
+      border-radius:6px;
+      transition:0.2s;
+    }
+
+    .project:hover {
+      background:#334155;
+      transform:translateX(5px);
+    }
+
+    /* MAIN */
+    .main {
+      flex:1;
+      padding:20px;
+      animation:fadeIn 0.5s;
+    }
+
+    @keyframes fadeIn {
+      from {opacity:0; transform:translateY(10px);}
+      to {opacity:1;}
+    }
+
+    .header {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+
+    .cards {
+      display:flex;
+      gap:15px;
+      margin-top:20px;
+    }
+
+    .card {
+      background:white;
+      padding:15px;
+      border-radius:10px;
+      width:180px;
+      text-align:center;
+      box-shadow:0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    table {
+      width:100%;
+      margin-top:20px;
+      border-collapse:collapse;
+      background:white;
+      border-radius:10px;
+      overflow:hidden;
+    }
+
+    th, td {
+      padding:12px;
+      border:1px solid #ddd;
+      text-align:center;
+    }
+
+    th { background:#e2e8f0; }
+
+    tr:hover { background:#f9fafb; }
+
+    .chart-container {
+      width:500px;
+      margin:20px auto;
+    }
+
+    .green { color:green; font-weight:bold; }
+    .yellow { color:orange; font-weight:bold; }
+    .red { color:red; font-weight:bold; }
+
+  </style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <img src="https://images.seeklogo.com/logo-png/22/2/solix-technologies-logo-png_seeklogo-228117.png">
+
+    <div class="project" onclick="loadSummary()">🏠 Dashboard</div>
+    <div class="project" onclick="loadProject('CDP')">CDP</div>
+    <div class="project" onclick="loadProject('EAI')">EAI</div>
+    <div class="project" onclick="loadProject('EAI-Pharma')">EAI Pharma</div>
+    <div class="project" onclick="loadProject('EAI-Healthcare')">EAI Health Care</div>
+    <div class="project" onclick="loadProject('EDG')">EDG</div>
+    <div class="project" onclick="loadProject('ECS')">ECS</div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <div class="header">
+      <h1 id="title">All Projects Overview</h1>
+      <img src="https://images.seeklogo.com/logo-png/22/2/solix-technologies-logo-png_seeklogo-228117.png" height="40">
+    </div>
+
+    <div class="cards" id="kpis"></div>
+
+    <div class="chart-container">
+      <canvas id="chart"></canvas>
+    </div>
+
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="data"></tbody>
+    </table>
+
+  </div>
+
+</div>
+
+<script>
+
+const BASE_API = "https://sheetdb.io/api/v1/y6g2jp39ugg0r";
+
+let chart;
+
+// CLEAN
+function clean(v){ return v ? v.toString().trim() : ""; }
+
+// NUMBER
+function num(v){ return Number(clean(v)) || 0; }
+
+// HEALTH
+function healthBadge(h){
+  h = clean(h);
+  if(h==="Green") return '<span class="green">🟢 Green</span>';
+  if(h==="Yellow") return '<span class="yellow">🟡 Yellow</span>';
+  if(h==="Red") return '<span class="red">🔴 Red</span>';
+  return "N/A";
+}
+
+// AVG
+function avg(arr){
+  return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+}
+
+// ================= MAIN DASHBOARD =================
+async function loadSummary(){
+
+  document.getElementById("title").innerText="All Projects Overview";
+
+  const projects=["CDP","EAI","EAI-Pharma","EAI-Healthcare","EDG","ECS"];
+  let summary=[];
+
+  for(let p of projects){
+
+    try{
+      let res=await fetch(`${BASE_API}?sheet=${encodeURIComponent(p)}`);
+      let data=await res.json();
+
+      data = Array.isArray(data)?data:[];
+      data = data.filter(d=>clean(d.Feature)!=="");
+
+      let dev=0, qa=0, risks=0;
+
+      if(data.length){
+        dev=avg(data.map(d=>num(d["Dev %"])));
+        qa=avg(data.map(d=>num(d["QA %"])));
+        risks=data.filter(d=>clean(d.Risks)!=="None" && clean(d.Risks)!=="").length;
+      }
+
+      let health="Green";
+      if(risks>3) health="Red";
+      else if(risks>1) health="Yellow";
+
+      summary.push({
+        Project:p.replace("-", " "),
+        Dev:dev,
+        QA:qa,
+        Risks:risks,
+        Health:health
+      });
+
+    }catch(e){
+      summary.push({Project:p,Dev:0,QA:0,Risks:0,Health:"N/A"});
+    }
+  }
+
+  renderSummary(summary);
+}
+
+// RENDER SUMMARY
+function renderSummary(data){
+
+  document.getElementById("thead").innerHTML=`
+    <tr>
+      <th>Project</th>
+      <th>Dev Avg %</th>
+      <th>QA Avg %</th>
+      <th>Risks</th>
+      <th>Health</th>
+    </tr>`;
+
+  // KPI
+  const dev=avg(data.map(d=>d.Dev));
+  const qa=avg(data.map(d=>d.QA));
+  const risks=data.reduce((a,b)=>a+b.Risks,0);
+
+  document.getElementById("kpis").innerHTML=`
+    <div class="card">Dev Avg<br><b>${dev.toFixed(1)}%</b></div>
+    <div class="card">QA Avg<br><b>${qa.toFixed(1)}%</b></div>
+    <div class="card">Total Risks<br><b>${risks}</b></div>
+  `;
+
+  // TABLE
+  let rows="";
+  data.forEach(d=>{
+    rows+=`
+      <tr>
+        <td>${d.Project}</td>
+        <td>${d.Dev.toFixed(1)}%</td>
+        <td>${d.QA.toFixed(1)}%</td>
+        <td style="color:red">${d.Risks}</td>
+        <td>${healthBadge(d.Health)}</td>
+      </tr>`;
+  });
+  document.getElementById("data").innerHTML=rows;
+
+  // CHART
+  if(chart) chart.destroy();
+  chart=new Chart(document.getElementById("chart"),{
+    type:"bar",
+    data:{
+      labels:data.map(d=>d.Project),
+      datasets:[
+        {label:"Dev %", data:data.map(d=>d.Dev)},
+        {label:"QA %", data:data.map(d=>d.QA)}
+      ]
+    }
+  });
+}
+
+// ================= PROJECT DETAIL =================
+async function loadProject(project){
+
+  document.getElementById("title").innerText=project.replace("-", " ")+" Details";
+
+  let res=await fetch(`${BASE_API}?sheet=${encodeURIComponent(project)}`);
+  let data=await res.json();
+
+  data=data.filter(d=>clean(d.Feature)!=="");
+
+  document.getElementById("thead").innerHTML=`
+    <tr>
+      <th>Month</th>
+      <th>Feature</th>
+      <th>Dev %</th>
+      <th>QA %</th>
+      <th>Status</th>
+      <th>Risks</th>
+      <th>Health</th>
+    </tr>`;
+
+  let rows="";
+  data.forEach(d=>{
+    rows+=`
+      <tr>
+        <td>${clean(d.Month)}</td>
+        <td>${clean(d.Feature)}</td>
+        <td>${num(d["Dev %"])}%</td>
+        <td>${num(d["QA %"])}%</td>
+        <td>${clean(d.Status)}</td>
+        <td style="color:red">${clean(d.Risks)}</td>
+        <td>${healthBadge(d.Health)}</td>
+      </tr>`;
+  });
+
+  document.getElementById("data").innerHTML=rows;
+
+  if(chart) chart.destroy();
+}
+
+// LOAD
+document.addEventListener("DOMContentLoaded", loadSummary);
+
+// REFRESH (1 hour)
+setInterval(()=>{
+  if(!document.hidden) loadSummary();
+},3600000);
+
+</script>
+
+</body>
+</html>
