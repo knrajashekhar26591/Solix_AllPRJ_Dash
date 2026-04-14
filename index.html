@@ -6,43 +6,25 @@
 
   <style>
     body { margin:0; font-family:Arial; background:#f1f5f9; }
-
     .container { display:flex; height:100vh; }
 
-    /* SIDEBAR */
     .sidebar {
-      width:250px;
-      background:#1e293b;
-      color:white;
-      padding:15px;
+      width:250px; background:#1e293b; color:white; padding:15px;
     }
 
     .sidebar img {
-      width:140px;
-      background:white;
-      padding:5px;
-      border-radius:6px;
-      margin-bottom:20px;
+      width:140px; background:white; padding:5px;
+      border-radius:6px; margin-bottom:20px;
     }
 
     .project {
-      padding:10px;
-      cursor:pointer;
-      border-radius:6px;
+      padding:10px; cursor:pointer; border-radius:6px;
       transition:0.2s;
     }
 
-    .project:hover {
-      background:#334155;
-      transform:translateX(5px);
-    }
+    .project:hover { background:#334155; transform:translateX(5px); }
 
-    /* MAIN */
-    .main {
-      flex:1;
-      padding:20px;
-      animation:fadeIn 0.5s;
-    }
+    .main { flex:1; padding:20px; animation:fadeIn 0.5s; }
 
     @keyframes fadeIn {
       from {opacity:0; transform:translateY(10px);}
@@ -50,54 +32,36 @@
     }
 
     .header {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
+      display:flex; justify-content:space-between; align-items:center;
     }
 
-    .cards {
-      display:flex;
-      gap:15px;
-      margin-top:20px;
-    }
+    .cards { display:flex; gap:15px; margin-top:20px; }
 
     .card {
-      background:white;
-      padding:15px;
-      border-radius:10px;
-      width:180px;
-      text-align:center;
+      background:white; padding:15px; border-radius:10px;
+      width:180px; text-align:center;
       box-shadow:0 2px 6px rgba(0,0,0,0.1);
     }
 
     table {
-      width:100%;
-      margin-top:20px;
-      border-collapse:collapse;
-      background:white;
-      border-radius:10px;
-      overflow:hidden;
+      width:100%; margin-top:20px; border-collapse:collapse;
+      background:white; border-radius:10px; overflow:hidden;
     }
 
     th, td {
-      padding:12px;
-      border:1px solid #ddd;
-      text-align:center;
+      padding:12px; border:1px solid #ddd; text-align:center;
     }
 
     th { background:#e2e8f0; }
-
     tr:hover { background:#f9fafb; }
 
     .chart-container {
-      width:500px;
-      margin:20px auto;
+      width:500px; margin:20px auto;
     }
 
     .green { color:green; font-weight:bold; }
     .yellow { color:orange; font-weight:bold; }
     .red { color:red; font-weight:bold; }
-
   </style>
 </head>
 
@@ -105,7 +69,6 @@
 
 <div class="container">
 
-  <!-- SIDEBAR -->
   <div class="sidebar">
     <img src="https://images.seeklogo.com/logo-png/22/2/solix-technologies-logo-png_seeklogo-228117.png">
 
@@ -118,7 +81,6 @@
     <div class="project" onclick="loadProject('ECS')">ECS</div>
   </div>
 
-  <!-- MAIN -->
   <div class="main">
 
     <div class="header">
@@ -143,76 +105,82 @@
 
 <script>
 
-const BASE_API = "https://sheetdb.io/api/v1/y6g2jp39ugg0r";
+const SHEET_ID = "12G9-5wm4XdCbfKmXFnn0nAPyqJFOE8QL-ka0IBa0TyQ";
+const API_KEY = "AIzaSyCMXFtMIf9Tlv2z_P_5I1agiwGUFn3nv7s";
+
+const PROJECTS = [
+  "CDP","EAI","EAI-Pharma","EAI-Healthcare","EDG","ECS"
+];
 
 let chart;
 
-// CLEAN
-function clean(v){ return v ? v.toString().trim() : ""; }
+// FETCH
+async function fetchSheet(tabName){
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(tabName)}?key=${API_KEY}`;
+  const res = await fetch(url);
+  const json = await res.json();
 
-// NUMBER
-function num(v){ return Number(clean(v)) || 0; }
+  if (!json.values || json.values.length < 2) return [];
 
-// HEALTH
+  const headers = json.values[0];
+
+  return json.values.slice(1).map(row => {
+    let obj = {};
+    headers.forEach((h,i)=>{
+      obj[h.trim()] = row[i] ? row[i].trim() : "";
+    });
+    return obj;
+  });
+}
+
+// HELPERS
+const num = v => Number(v) || 0;
+const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
+
 function healthBadge(h){
-  h = clean(h);
   if(h==="Green") return '<span class="green">🟢 Green</span>';
   if(h==="Yellow") return '<span class="yellow">🟡 Yellow</span>';
   if(h==="Red") return '<span class="red">🔴 Red</span>';
   return "N/A";
 }
 
-// AVG
-function avg(arr){
-  return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0;
-}
-
-// ================= MAIN DASHBOARD =================
+// ================= DASHBOARD =================
 async function loadSummary(){
 
   document.getElementById("title").innerText="All Projects Overview";
 
-  const projects=["CDP","EAI","EAI-Pharma","EAI-Healthcare","EDG","ECS"];
   let summary=[];
 
-  for(let p of projects){
+  for(let p of PROJECTS){
 
-    try{
-      let res=await fetch(`${BASE_API}?sheet=${encodeURIComponent(p)}`);
-      let data=await res.json();
+    let data = await fetchSheet(p);
 
-      data = Array.isArray(data)?data:[];
-      data = data.filter(d=>clean(d.Feature)!=="");
+    let dev = avg(data.map(d=>num(d["Dev %"])));
+    let qa = avg(data.map(d=>num(d["QA %"])));
 
-      let dev=0, qa=0, risks=0;
+    let riskItems = data.map(d=>d.Risks).filter(r=>r && r!=="None");
+    let risks = riskItems.length;
 
-      if(data.length){
-        dev=avg(data.map(d=>num(d["Dev %"])));
-        qa=avg(data.map(d=>num(d["QA %"])));
-        risks=data.filter(d=>clean(d.Risks)!=="None" && clean(d.Risks)!=="").length;
-      }
+    // HEALTH
+    let healthValues = data.map(d=>d["Health"]).filter(h=>h);
+    let health="Green";
+    if (healthValues.includes("Red")) health="Red";
+    else if (healthValues.includes("Yellow")) health="Yellow";
 
-      let health="Green";
-      if(risks>3) health="Red";
-      else if(risks>1) health="Yellow";
-
-      summary.push({
-        Project:p.replace("-", " "),
-        Dev:dev,
-        QA:qa,
-        Risks:risks,
-        Health:health
-      });
-
-    }catch(e){
-      summary.push({Project:p,Dev:0,QA:0,Risks:0,Health:"N/A"});
-    }
+    summary.push({
+      Project:p.replace("-"," "),
+      Dev:dev,
+      QA:qa,
+      Risks:risks,
+      RiskDetails:riskItems.join(", "),
+      Health:health
+    });
   }
 
   renderSummary(summary);
 }
 
-// RENDER SUMMARY
+// ================= RENDER =================
 function renderSummary(data){
 
   document.getElementById("thead").innerHTML=`
@@ -224,7 +192,6 @@ function renderSummary(data){
       <th>Health</th>
     </tr>`;
 
-  // KPI
   const dev=avg(data.map(d=>d.Dev));
   const qa=avg(data.map(d=>d.QA));
   const risks=data.reduce((a,b)=>a+b.Risks,0);
@@ -235,7 +202,6 @@ function renderSummary(data){
     <div class="card">Total Risks<br><b>${risks}</b></div>
   `;
 
-  // TABLE
   let rows="";
   data.forEach(d=>{
     rows+=`
@@ -243,14 +209,23 @@ function renderSummary(data){
         <td>${d.Project}</td>
         <td>${d.Dev.toFixed(1)}%</td>
         <td>${d.QA.toFixed(1)}%</td>
-        <td style="color:red">${d.Risks}</td>
+        <td>
+          ${
+            d.Risks === 0
+            ? '<span style="color:green;font-weight:bold">No Risk</span>'
+            : `<span style="color:red;font-weight:bold" title="${d.RiskDetails}">
+                ${d.Risks} ⚠️
+              </span>`
+          }
+        </td>
         <td>${healthBadge(d.Health)}</td>
       </tr>`;
   });
+
   document.getElementById("data").innerHTML=rows;
 
-  // CHART
   if(chart) chart.destroy();
+
   chart=new Chart(document.getElementById("chart"),{
     type:"bar",
     data:{
@@ -263,15 +238,22 @@ function renderSummary(data){
   });
 }
 
-// ================= PROJECT DETAIL =================
+// ================= PROJECT =================
 async function loadProject(project){
 
-  document.getElementById("title").innerText=project.replace("-", " ")+" Details";
+  document.getElementById("title").innerText=project.replace("-"," ")+" Details";
 
-  let res=await fetch(`${BASE_API}?sheet=${encodeURIComponent(project)}`);
-  let data=await res.json();
+  let data=await fetchSheet(project);
 
-  data=data.filter(d=>clean(d.Feature)!=="");
+  let dev = avg(data.map(d=>num(d["Dev %"])));
+  let qa = avg(data.map(d=>num(d["QA %"])));
+  let risks = data.filter(d=>d.Risks && d.Risks!=="None").length;
+
+  document.getElementById("kpis").innerHTML=`
+    <div class="card">Dev Avg<br><b>${dev.toFixed(1)}%</b></div>
+    <div class="card">QA Avg<br><b>${qa.toFixed(1)}%</b></div>
+    <div class="card">Risks<br><b>${risks}</b></div>
+  `;
 
   document.getElementById("thead").innerHTML=`
     <tr>
@@ -288,25 +270,49 @@ async function loadProject(project){
   data.forEach(d=>{
     rows+=`
       <tr>
-        <td>${clean(d.Month)}</td>
-        <td>${clean(d.Feature)}</td>
+        <td>${d.Month}</td>
+        <td>${d.Feature}</td>
         <td>${num(d["Dev %"])}%</td>
         <td>${num(d["QA %"])}%</td>
-        <td>${clean(d.Status)}</td>
-        <td style="color:red">${clean(d.Risks)}</td>
+        <td>${d.Status}</td>
+        <td>
+          ${
+            !d.Risks || d.Risks==="None"
+            ? '<span style="color:green;font-weight:bold">No Risk</span>'
+            : `<span style="color:red;font-weight:bold" title="${d.Risks}">
+                ⚠️
+              </span>`
+          }
+        </td>
         <td>${healthBadge(d.Health)}</td>
       </tr>`;
   });
 
   document.getElementById("data").innerHTML=rows;
 
+  // TREND
+  let months = data.map(d=>d.Month);
+  let devData = data.map(d=>num(d["Dev %"]));
+  let qaData = data.map(d=>num(d["QA %"]));
+
   if(chart) chart.destroy();
+
+  chart=new Chart(document.getElementById("chart"),{
+    type:"line",
+    data:{
+      labels:months,
+      datasets:[
+        {label:"Dev %", data:devData},
+        {label:"QA %", data:qaData}
+      ]
+    }
+  });
 }
 
-// LOAD
+// INIT
 document.addEventListener("DOMContentLoaded", loadSummary);
 
-// REFRESH (1 hour)
+// AUTO REFRESH
 setInterval(()=>{
   if(!document.hidden) loadSummary();
 },3600000);
